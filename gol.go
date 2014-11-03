@@ -6,9 +6,10 @@ import (
 )
 
 type Grid struct {
-	Width  int
-	Height int
-	Cells  [][]*Cell
+	Width      int
+	Height     int
+	Cells      [][]*Cell
+	CellTicked chan bool
 }
 
 type Cell struct {
@@ -17,9 +18,9 @@ type Cell struct {
 
 func (c *Cell) String() string {
 	if c.Alive {
-		return "*"
+		return "o"
 	} else {
-		return "&"
+		return "#"
 	}
 }
 
@@ -27,6 +28,8 @@ func newGrid(width, height int) *Grid {
 	grid := &Grid{Width: width, Height: height}
 
 	grid.Cells = make([][]*Cell, height, height)
+
+	grid.CellTicked = make(chan bool, width*height)
 
 	for y := 0; y < height; y++ {
 		grid.Cells[y] = make([]*Cell, height, height)
@@ -55,6 +58,7 @@ func (grid *Grid) copy() *Grid {
 	grid_copy := &Grid{Width: grid.Width, Height: grid.Height}
 
 	grid_copy.Cells = make([][]*Cell, grid.Height, grid.Height)
+	grid_copy.CellTicked = make(chan bool, grid.Width*grid.Height)
 
 	for y := 0; y < grid.Height; y++ {
 		grid_copy.Cells[y] = make([]*Cell, grid.Height, grid.Height)
@@ -67,58 +71,66 @@ func (grid *Grid) copy() *Grid {
 	return grid_copy
 }
 
+func tick(grid *Grid, next_grid *Grid, cell *Cell, x, y int) {
+	live_neighbours := 0
+
+	if x > 0 && grid.Cells[y][x-1].Alive {
+		live_neighbours += 1
+	}
+
+	if x > 0 && y < grid.Height-1 && grid.Cells[y+1][x-1].Alive {
+		live_neighbours += 1
+	}
+
+	if y < grid.Height-1 && grid.Cells[y+1][x].Alive {
+		live_neighbours += 1
+	}
+
+	if x < grid.Width-1 && y < grid.Height-1 && grid.Cells[y+1][x+1].Alive {
+		live_neighbours += 1
+	}
+
+	if x < grid.Width-1 && grid.Cells[y][x+1].Alive {
+		live_neighbours += 1
+	}
+
+	if x < grid.Width-1 && y > 0 && grid.Cells[y-1][x+1].Alive {
+		live_neighbours += 1
+	}
+
+	if y > 0 && grid.Cells[y-1][x].Alive {
+		live_neighbours += 1
+	}
+
+	if y > 0 && x > 0 && grid.Cells[y-1][x-1].Alive {
+		live_neighbours += 1
+	}
+
+	if grid.Cells[y][x].Alive {
+		if live_neighbours < 2 {
+			next_grid.Cells[y][x] = &Cell{Alive: false}
+		} else if live_neighbours > 3 {
+			next_grid.Cells[y][x] = &Cell{Alive: false}
+		} else {
+			next_grid.Cells[y][x] = &Cell{Alive: true}
+		}
+	} else {
+		if live_neighbours == 3 {
+			next_grid.Cells[y][x] = &Cell{Alive: true}
+		} else {
+			next_grid.Cells[y][x] = &Cell{Alive: false}
+		}
+	}
+
+	grid.CellTicked <- true
+}
+
 func (grid *Grid) tick() *Grid {
 	next_grid := grid.copy()
 
 	for y := 0; y < grid.Height; y++ {
 		for x := 0; x < grid.Width; x++ {
-			live_neighbours := 0
-
-			if x > 0 && grid.Cells[y][x-1].Alive {
-				live_neighbours += 1
-			}
-
-			if x > 0 && y < grid.Height-1 && grid.Cells[y+1][x-1].Alive {
-				live_neighbours += 1
-			}
-
-			if y < grid.Height-1 && grid.Cells[y+1][x].Alive {
-				live_neighbours += 1
-			}
-
-			if x < grid.Width-1 && y < grid.Height-1 && grid.Cells[y+1][x+1].Alive {
-				live_neighbours += 1
-			}
-
-			if x < grid.Width-1 && grid.Cells[y][x+1].Alive {
-				live_neighbours += 1
-			}
-
-			if x < grid.Width-1 && y > 0 && grid.Cells[y-1][x+1].Alive {
-				live_neighbours += 1
-			}
-			if y > 0 && grid.Cells[y-1][x].Alive {
-				live_neighbours += 1
-			}
-			if y > 0 && x > 0 && grid.Cells[y-1][x-1].Alive {
-				live_neighbours += 1
-			}
-
-			if grid.Cells[y][x].Alive {
-				if live_neighbours < 2 {
-					next_grid.Cells[y][x] = &Cell{Alive: false}
-				} else if live_neighbours > 3 {
-					next_grid.Cells[y][x] = &Cell{Alive: false}
-				} else {
-					next_grid.Cells[y][x] = &Cell{Alive: true}
-				}
-			} else {
-				if live_neighbours == 3 {
-					next_grid.Cells[y][x] = &Cell{Alive: true}
-				} else {
-					next_grid.Cells[y][x] = &Cell{Alive: false}
-				}
-			}
+			go tick(grid, next_grid, grid.Cells[y][x], x, y)
 		}
 	}
 
@@ -129,23 +141,26 @@ func main() {
 	width := 30
 	height := 30
 
-	grid := newGrid(width, height)
+	old_grid := newGrid(width, height)
 
-	grid.Cells[15][15] = &Cell{true}
-	grid.Cells[14][16] = &Cell{true}
-	grid.Cells[13][14] = &Cell{true}
-	grid.Cells[13][15] = &Cell{true}
-	grid.Cells[13][16] = &Cell{true}
+	old_grid.Cells[15][15] = &Cell{true}
+	old_grid.Cells[14][16] = &Cell{true}
+	old_grid.Cells[13][14] = &Cell{true}
+	old_grid.Cells[13][15] = &Cell{true}
+	old_grid.Cells[13][16] = &Cell{true}
 
 	fmt.Println("\033c")
-	fmt.Print(grid)
+	fmt.Print(old_grid)
 
 	for i := 0; i <= 100; i++ {
-		time.Sleep(500 * time.Millisecond)
+		new_grid := old_grid.tick()
+		for i := 1; i <= old_grid.Width*old_grid.Height; i++ {
+			<-old_grid.CellTicked
+		}
+		time.Sleep(100 * time.Millisecond)
 
 		fmt.Println("\033c")
-		grid = grid.tick()
-		fmt.Print(grid)
+		fmt.Print(new_grid)
+		old_grid = new_grid
 	}
-
 }
