@@ -6,15 +6,15 @@ import (
 )
 
 type Game struct {
-  Previous *Grid
-  Current *Grid
-  CellTicked chan bool
+	Previous   *Grid
+	Current    *Grid
+	CellTicked chan bool
 }
 
 type Grid struct {
-	Width      int
-	Height     int
-	Cells      [][]*Cell
+	Width  int
+	Height int
+	Cells  [][]*Cell
 }
 
 type Cell struct {
@@ -143,14 +143,13 @@ func (game *Game) tick() {
 	}
 }
 
-
 func main() {
 	width := 30
 	height := 30
 
 	grid := newGrid(width, height)
 
-	game := &Game{Current: grid, CellTicked: make(chan bool, width * height)}
+	game := &Game{Current: grid, CellTicked: make(chan bool, width*height)}
 
 	game.Current.Cells[15][15] = &Cell{true}
 	game.Current.Cells[14][16] = &Cell{true}
